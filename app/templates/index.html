@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}核对 · 复扫页数核对{% endblock %}
+{% block content %}
+<h1>复扫页数核对</h1>
+
+{% if latest is none %}
+  <div class="empty">
+    <p>还没有已提交的批次修订清单与汇总单。</p>
+    <a class="primary button" href="{{ url_for('main.import_form') }}">去导入</a>
+  </div>
+{% else %}
+  <p class="state">
+    当前提交 <strong>#{{ latest.id }}</strong>
+    <span class="muted">{{ latest.created_at }} · {{ '导入' if latest.source == 'import' else '更版' }}</span>
+    {% if latest.note %}<span class="muted">· {{ latest.note }}</span>{% endif %}
+  </p>
+
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+  <form method="get" action="{{ url_for('main.index') }}" class="stack">
+    <input type="hidden" name="check" value="1">
+    <section class="panel">
+      <h2>现行批次与修订号</h2>
+      <p class="hint">勾选待验批次。只有每个所选批次恰好计入一次、且没有额外批次的整单组合才算有效。</p>
+      <table class="grid">
+        <thead><tr><th>选</th><th>批次</th><th>现行修订号</th></tr></thead>
+        <tbody>
+        {% for batch in snapshot.batches %}
+          <tr>
+            <td><input type="checkbox" name="batch" value="{{ batch.code }}"
+                       {% if batch.code in selected %}checked{% endif %}></td>
+            <td>{{ batch.code }}</td>
+            <td><span class="rev">{{ batch.revision|r }}</span></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <div class="actions">
+        <button type="submit" class="primary">核对所选批次</button>
+        <a class="ghost" href="{{ url_for('main.index') }}">清除选择</a>
+      </div>
+    </section>
+  </form>
+
+  {% if result %}
+    <section class="panel result {{ result.status }}"
+             id="result" data-status="{{ result.status }}">
+      <h2>核对结果</h2>
+      {% if result.status == 'ok' %}
+        <p class="big-number" id="page-total">{{ result.total }}<span>页</span></p>
+        <p>所选批次共有 {{ result.combination_count }} 种有效整单组合，总页数一致。</p>
+        <p class="muted">采用组合：{{ result.witnesses[0].sheets|join('、') }}（合计 {{ result.witnesses[0].total }} 页）</p>
+      {% elif result.status == 'conflict' %}
+        <p class="big-number warn">无法唯一报数</p>
+        <p>有效组合之间存在不同总页数，请复核以下两组：</p>
+        <div class="witnesses">
+          {% for witness in result.witnesses %}
+            <div class="witness">
+              <div class="witness-sheets">{{ witness.sheets|join('、') }}</div>
+              <div class="witness-total">合计 {{ witness.total }} 页</div>
+            </div>
+          {% endfor %}
+        </div>
+        <p class="muted">共有 {{ result.combination_count }} 种有效组合。</p>
+      {% else %}
+        <p class="big-number warn">无法出数</p>
+        <p>没有由有效汇总单组成的整单组合能恰好覆盖所选批次（每个一次、无额外批次）。</p>
+      {% endif %}
+    </section>
+  {% endif %}
+
+  <section class="panel">
+    <h2>汇总单与修订吻合情况</h2>
+    <p class="hint">核对只采用所含批次修订号全部与现行一致的汇总单；页数只有整单合计。</p>
+    <table class="grid sheets">
+      <thead><tr><th>单号</th><th>总页数</th><th>所含批次（单上修订号）</th><th>状态</th></tr></thead>
+      <tbody>
+      {% for sheet in snapshot.sheets %}
+        {% set stale_rows = stale|selectattr('code', 'equalto', sheet.code)|list %}
+        <tr>
+          <td>{{ sheet.code }}</td>
+          <td class="num">{{ sheet.total_pages }}</td>
+          <td>
+            {% for code, rev in sheet.entries %}
+              <span class="chip">{{ code }} {{ rev|r }}</span>
+            {% endfor %}
+          </td>
+          <td>
+            {% if stale_rows %}
+              <span class="badge bad">不采用</span>
+              <ul class="why">{% for detail in stale_rows[0].details %}<li>{{ detail }}</li>{% endfor %}</ul>
+            {% else %}
+              <span class="badge good">可用</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <h2>更新批次现行修订号</h2>
+    <p class="hint">提交后生成新的已提交状态；清单与汇总单会整体复制到新状态，汇总单保持其原修订号，因此旧单会自动变为不采用。</p>
+    <form method="post" action="{{ url_for('main.update_revision') }}" class="inline">
+      <input type="hidden" name="base_id" value="{{ latest.id }}">
+      <label>批次
+        <select name="code" required>
+          {% for batch in snapshot.batches %}
+            <option value="{{ batch.code }}">{{ batch.code }}（现行 {{ batch.revision|r }}）</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>新修订号 <input type="number" name="revision" min="1" step="1" required></label>
+      <button type="submit" class="primary">提交更版</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>提交记录</h2>
+    <ol class="history">
+      {% for sub in submissions %}
+        <li>
+          <strong>#{{ sub.id }}</strong>
+          <span class="muted">{{ sub.created_at }} · {{ '导入' if sub.source == 'import' else '更版' }}</span>
+          {% if sub.note %}<span class="muted">· {{ sub.note }}</span>{% endif %}
+        </li>
+      {% endfor %}
+    </ol>
+  </section>
+{% endif %}
+{% endblock %}

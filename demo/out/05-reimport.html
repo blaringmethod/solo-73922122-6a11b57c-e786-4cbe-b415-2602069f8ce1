@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>核对 · 复扫页数核对</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">复扫页数核对</a>
+  <nav>
+    <a href="/import">导入清单与汇总单</a>
+  </nav>
+</header>
+<main>
+  
+    
+  
+  
+<h1>复扫页数核对</h1>
+
+
+  <p class="state">
+    当前提交 <strong>#3</strong>
+    <span class="muted">2026-11-22T06:31:04+00:00 · 导入</span>
+    <span class="muted">· 网页导入</span>
+  </p>
+
+  
+
+  <form method="get" action="/" class="stack">
+    <input type="hidden" name="check" value="1">
+    <section class="panel">
+      <h2>现行批次与修订号</h2>
+      <p class="hint">勾选待验批次。只有每个所选批次恰好计入一次、且没有额外批次的整单组合才算有效。</p>
+      <table class="grid">
+        <thead><tr><th>选</th><th>批次</th><th>现行修订号</th></tr></thead>
+        <tbody>
+        
+          <tr>
+            <td><input type="checkbox" name="batch" value="B01"
+                       ></td>
+            <td>B01</td>
+            <td><span class="rev">r3</span></td>
+          </tr>
+        
+          <tr>
+            <td><input type="checkbox" name="batch" value="B02"
+                       ></td>
+            <td>B02</td>
+            <td><span class="rev">r2</span></td>
+          </tr>
+        
+          <tr>
+            <td><input type="checkbox" name="batch" value="B03"
+                       ></td>
+            <td>B03</td>
+            <td><span class="rev">r1</span></td>
+          </tr>
+        
+          <tr>
+            <td><input type="checkbox" name="batch" value="B04"
+                       ></td>
+            <td>B04</td>
+            <td><span class="rev">r1</span></td>
+          </tr>
+        
+        </tbody>
+      </table>
+      <div class="actions">
+        <button type="submit" class="primary">核对所选批次</button>
+        <a class="ghost" href="/">清除选择</a>
+      </div>
+    </section>
+  </form>
+
+  
+
+  <section class="panel">
+    <h2>汇总单与修订吻合情况</h2>
+    <p class="hint">核对只采用所含批次修订号全部与现行一致的汇总单；页数只有整单合计。</p>
+    <table class="grid sheets">
+      <thead><tr><th>单号</th><th>总页数</th><th>所含批次（单上修订号）</th><th>状态</th></tr></thead>
+      <tbody>
+      
+        
+        <tr>
+          <td>T1</td>
+          <td class="num">150</td>
+          <td>
+            
+              <span class="chip">B01 r3</span>
+            
+              <span class="chip">B02 r2</span>
+            
+          </td>
+          <td>
+            
+              <span class="badge good">可用</span>
+            
+          </td>
+        </tr>
+      
+        
+        <tr>
+          <td>T2</td>
+          <td class="num">90</td>
+          <td>
+            
+              <span class="chip">B03 r1</span>
+            
+              <span class="chip">B04 r1</span>
+            
+          </td>
+          <td>
+            
+              <span class="badge good">可用</span>
+            
+          </td>
+        </tr>
+      
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <h2>更新批次现行修订号</h2>
+    <p class="hint">提交后生成新的已提交状态；清单与汇总单会整体复制到新状态，汇总单保持其原修订号，因此旧单会自动变为不采用。</p>
+    <form method="post" action="/revision" class="inline">
+      <input type="hidden" name="base_id" value="3">
+      <label>批次
+        <select name="code" required>
+          
+            <option value="B01">B01（现行 r3）</option>
+          
+            <option value="B02">B02（现行 r2）</option>
+          
+            <option value="B03">B03（现行 r1）</option>
+          
+            <option value="B04">B04（现行 r1）</option>
+          
+        </select>
+      </label>
+      <label>新修订号 <input type="number" name="revision" min="1" step="1" required></label>
+      <button type="submit" class="primary">提交更版</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>提交记录</h2>
+    <ol class="history">
+      
+        <li>
+          <strong>#3</strong>
+          <span class="muted">2026-11-22T06:31:04+00:00 · 导入</span>
+          <span class="muted">· 网页导入</span>
+        </li>
+      
+        <li>
+          <strong>#2</strong>
+          <span class="muted">2026-11-22T06:31:04+00:00 · 更版</span>
+          <span class="muted">· B01 修订号改为 r3</span>
+        </li>
+      
+        <li>
+          <strong>#1</strong>
+          <span class="muted">2026-11-22T06:31:04+00:00 · 导入</span>
+          <span class="muted">· 网页导入</span>
+        </li>
+      
+    </ol>
+  </section>
+
+
+</main>
+<footer>本页只做核对，不改动扫描原件。所有提交均为追加记录，可回溯。</footer>
+</body>
+</html>

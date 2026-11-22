@@ -1,0 +1,15 @@
+services:
+  collation:
+    build: .
+    image: collation-check:local
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_PATH: /data/collation.sqlite3
+      SECRET_KEY: ${SECRET_KEY:-local-demo-key}
+    volumes:
+      - collation-data:/data
+    restart: unless-stopped
+
+volumes:
+  collation-data:

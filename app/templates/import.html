@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}导入清单与汇总单 · 复扫页数核对{% endblock %}
+{% block content %}
+<h1>导入批次修订清单与页数汇总单</h1>
+<p class="hint">
+  每行一个批次：<code>批次号 修订号</code>；汇总单用空行分隔，首行为
+  <code>单号 总页数</code>，其后每行为 <code>批次号 修订号</code>。
+  最多 {{ max_batches }} 个批次、{{ max_sheets }} 张单。
+  导入会一次性校验，任一处有误则整批不保存。
+</p>
+
+<form method="post" action="{{ url_for('main.import_documents') }}" class="import-grid">
+  <section>
+    <label for="batches">批次修订清单</label>
+    <textarea id="batches" name="batches" rows="14" spellcheck="false"
+              placeholder="{{ sample_batches }}">{{ batches_text }}</textarea>
+    <button type="button" class="ghost sample" data-target="batches"
+            data-sample="{{ sample_batches }}">填入示例</button>
+  </section>
+  <section>
+    <label for="sheets">页数汇总单</label>
+    <textarea id="sheets" name="sheets" rows="14" spellcheck="false"
+              placeholder="{{ sample_sheets }}">{{ sheets_text }}</textarea>
+    <button type="button" class="ghost sample" data-target="sheets"
+            data-sample="{{ sample_sheets }}">填入示例</button>
+  </section>
+  <div class="actions">
+    <button type="submit" class="primary">校验并提交</button>
+    <a class="ghost" href="{{ url_for('main.index') }}">返回核对页</a>
+  </div>
+</form>
+
+<details class="samples">
+  <summary>输入格式示例</summary>
+  <pre>批次清单：
+B01 r2
+B02 r2
+B03 r1
+
+汇总单：
+S1 150
+B01 r2
+B02 r2
+
+S2 90
+B03 r1</pre>
+</details>
+
+<script src="{{ url_for('static', filename='sample.js') }}"></script>
+{% endblock %}
