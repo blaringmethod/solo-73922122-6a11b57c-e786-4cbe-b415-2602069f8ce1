@@ -143,6 +143,18 @@ table.grid td.num { font-variant-numeric: tabular-nums; }
 
 .result { border-left: 5px solid var(--accent); }
 .result.conflict, .result.none { border-left-color: var(--warn); }
+
+.check-basis {
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent-soft);
+  padding: 0.7rem 0.95rem;
+  margin: 0.9rem 0;
+}
+.check-basis.superseded { border-left-color: var(--warn); background: #fffaf0; }
+.check-basis p { margin: 0.35rem 0 0; }
+.note-superseded { color: var(--warn); font-size: 0.88rem; }
 .big-number {
   font-size: 2.3rem;
   font-weight: 700;

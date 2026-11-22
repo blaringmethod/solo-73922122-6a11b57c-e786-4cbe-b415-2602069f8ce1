@@ -10,20 +10,50 @@
   </div>
 {% else %}
   <p class="state">
-    当前提交 <strong>#{{ latest.id }}</strong>
+    最新提交 <strong id="latest-id">#{{ latest.id }}</strong>
     <span class="muted">{{ latest.created_at }} · {{ '导入' if latest.source == 'import' else '更版' }}</span>
     {% if latest.note %}<span class="muted">· {{ latest.note }}</span>{% endif %}
   </p>
 
   {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
 
+  {% if checked %}
+    <div class="check-basis {{ 'superseded' if checked.has_later else 'current' }}"
+         id="check-basis" data-submission="{{ snapshot.submission.id }}"
+         data-latest="{{ latest.id }}">
+      <strong>本次核对所用提交：<span id="checked-id">#{{ snapshot.submission.id }}</span></strong>
+      <span class="muted">{{ snapshot.submission.created_at }} ·
+        {{ '导入' if snapshot.submission.source == 'import' else '更版' }}
+        {% if snapshot.submission.note %}· {{ snapshot.submission.note }}{% endif %}
+      </span>
+      <p class="muted">下方清单、各汇总单状态与核对结论均取自提交
+        <strong>#{{ snapshot.submission.id }}</strong>，不是页面其他位置的现行提交。</p>
+      {% if checked.has_later %}
+        <p class="note-superseded">
+          勾选之后又有 {{ checked.later|length }} 次提交（最新
+          <strong>#{{ latest.id }}</strong>），但只改动了<em>未勾选</em>的批次，
+          因此原勾选仍可核对，本次结论仍以 <strong>#{{ snapshot.submission.id }}</strong> 为准。
+          <a href="{{ url_for('main.index') }}">刷新到最新提交并重新勾选</a>
+        </p>
+      {% endif %}
+      {% if permalink %}
+        <p class="muted">本次结论链接：<a id="check-permalink" href="{{ permalink }}">{{ permalink }}</a>
+          （重新打开仍按提交 #{{ snapshot.submission.id }} 判定）。</p>
+      {% endif %}
+    </div>
+  {% endif %}
+
   <form method="get" action="{{ url_for('main.index') }}" class="stack">
     <input type="hidden" name="check" value="1">
+    {% if form_from %}
+      <input type="hidden" name="from" value="{{ form_from }}">
+    {% endif %}
     <section class="panel">
-      <h2>现行批次与修订号</h2>
-      <p class="hint">勾选待验批次。只有每个所选批次恰好计入一次、且没有额外批次的整单组合才算有效。</p>
+      <h2>{% if checked and checked.has_later %}勾选时所见{% else %}现行{% endif %}批次与修订号（提交 #{{ snapshot.submission.id }}）</h2>
+      <p class="hint">勾选待验批次。只有每个所选批次恰好计入一次、且没有额外批次的整单组合才算有效。
+        提交核对时会带上勾选时所见的提交号，服务端据此判断勾选是否仍有效。</p>
       <table class="grid">
-        <thead><tr><th>选</th><th>批次</th><th>现行修订号</th></tr></thead>
+        <thead><tr><th>选</th><th>批次</th><th>勾选时所见修订号</th></tr></thead>
         <tbody>
         {% for batch in snapshot.batches %}
           <tr>
@@ -44,8 +74,9 @@
 
   {% if result %}
     <section class="panel result {{ result.status }}"
-             id="result" data-status="{{ result.status }}">
-      <h2>核对结果</h2>
+             id="result" data-status="{{ result.status }}"
+             data-submission="{{ snapshot.submission.id }}">
+      <h2>核对结果 <span class="muted">（依据提交 #{{ snapshot.submission.id }}）</span></h2>
       {% if result.status == 'ok' %}
         <p class="big-number" id="page-total">{{ result.total }}<span>页</span></p>
         <p>所选批次共有 {{ result.combination_count }} 种有效整单组合，总页数一致。</p>
@@ -70,8 +101,8 @@
   {% endif %}
 
   <section class="panel">
-    <h2>汇总单与修订吻合情况</h2>
-    <p class="hint">核对只采用所含批次修订号全部与现行一致的汇总单；页数只有整单合计。</p>
+    <h2>汇总单与修订吻合情况{% if snapshot %}（提交 #{{ snapshot.submission.id }}）{% endif %}</h2>
+    <p class="hint">核对只采用所含批次修订号全部与勾选时所见现行修订号一致的汇总单；页数只有整单合计。</p>
     <table class="grid sheets">
       <thead><tr><th>单号</th><th>总页数</th><th>所含批次（单上修订号）</th><th>状态</th></tr></thead>
       <tbody>
@@ -100,13 +131,13 @@
   </section>
 
   <section class="panel">
-    <h2>更新批次现行修订号</h2>
-    <p class="hint">提交后生成新的已提交状态；清单与汇总单会整体复制到新状态，汇总单保持其原修订号，因此旧单会自动变为不采用。</p>
+    <h2>更新批次现行修订号（当前提交 #{{ latest.id }}）</h2>
+    <p class="hint">提交后生成新的已提交状态；清单与汇总单会整体复制到新状态，汇总单保持其原修订号，因此旧单会自动变为不采用。更版不影响只改动了未勾选批次的旧勾选。</p>
     <form method="post" action="{{ url_for('main.update_revision') }}" class="inline">
       <input type="hidden" name="base_id" value="{{ latest.id }}">
       <label>批次
         <select name="code" required>
-          {% for batch in snapshot.batches %}
+          {% for batch in latest_snapshot.batches %}
             <option value="{{ batch.code }}">{{ batch.code }}（现行 {{ batch.revision|r }}）</option>
           {% endfor %}
         </select>

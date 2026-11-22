@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Iterable
 
 from .models import Batch, Sheet, Snapshot, Submission
 from .parsing import MAX_BATCHES, MAX_SHEETS, ImportError_
@@ -14,6 +16,166 @@ class RevisionError(ValueError):
     def __init__(self, message: str):
         super().__init__(message)
         self.message = message
+
+
+@dataclass(frozen=True)
+class CheckBase:
+    """Where the submission recorded when the boxes were ticked sits now.
+
+    ``relation`` is one of:
+
+    * ``current`` – it is still the newest submission, so the ticked page is
+      exactly the committed state it was rendered from.
+    * ``superseded`` – newer submissions exist, but every later one is a
+      revision update of an *unselected* batch; the ticked batches still carry
+      the same revisions, so the selection is still valid and is reconciled
+      against the ticked submission, never against the newest one.
+    * ``stale`` – a later submission re-imported the whole set or changed the
+      revision of a ticked batch. Even if a change was later reverted, the
+      ticked selection no longer refers to one committed state, so the user
+      must tick again.
+    """
+
+    relation: str
+    snapshot: Snapshot
+    latest: Submission
+    later: tuple[Submission, ...]
+    selected_batches: tuple[Batch, ...]
+    changed_batches: tuple[str, ...]
+    reimported_ids: tuple[int, ...]
+
+    @property
+    def is_stale(self) -> bool:
+        return self.relation == "stale"
+
+    @property
+    def has_later(self) -> bool:
+        return bool(self.later)
+
+
+def _later_batch_revisions(
+    conn: sqlite3.Connection, recorded_id: int
+) -> dict[int, dict[str, int]]:
+    """Batch revisions for every submission newer than ``recorded_id``."""
+    rows = conn.execute(
+        "SELECT submission_id, code, revision FROM batches"
+        " WHERE submission_id > ? ORDER BY submission_id, code",
+        (recorded_id,),
+    ).fetchall()
+    states: dict[int, dict[str, int]] = {}
+    for row in rows:
+        states.setdefault(row["submission_id"], {})[row["code"]] = row["revision"]
+    return states
+
+
+def _check_base_in_tx(
+    conn: sqlite3.Connection,
+    *,
+    recorded_id: int,
+    selected_codes: Iterable[str],
+) -> CheckBase:
+    snapshot = _load_snapshot_in_tx(conn, recorded_id)
+    latest = latest_submission(conn)
+    if latest is None:  # cannot happen with a recorded id, defensive
+        raise LookupError(f"提交记录 {recorded_id} 不存在")
+
+    codes = set(dict.fromkeys(selected_codes))
+    ticked = tuple(batch for batch in snapshot.batches if batch.code in codes)
+
+    later_rows = conn.execute(
+        "SELECT id, created_at, source, note FROM submissions"
+        " WHERE id > ? ORDER BY id",
+        (recorded_id,),
+    ).fetchall()
+    later = tuple(Submission(**dict(row)) for row in later_rows)
+    later_states = _later_batch_revisions(conn, recorded_id)
+
+    changed: list[str] = []
+    reimported: list[int] = []
+    # Walk the chain in order and compare each state with the one before it.
+    # Comparing only against the ticked state would miss r2 -> r3 -> r2; a
+    # reverted revision still means the ticked selection no longer names one
+    # committed state. Once stale, later states cannot make it valid again.
+    previous = {batch.code: batch.revision for batch in snapshot.batches}
+    for submission in later:
+        if submission.source == "import":
+            # Every import replaces the whole committed state. Even identical
+            # content means the old page no longer names a state that was
+            # committed when its boxes were ticked.
+            reimported.append(submission.id)
+            break
+        current = later_states.get(submission.id, {})
+        for batch in ticked:
+            before = previous.get(batch.code)
+            after = current.get(batch.code)
+            if (before is None or after is None or before != after) and (
+                batch.code not in changed
+            ):
+                changed.append(batch.code)
+        if changed:
+            break
+        previous = current
+
+    if reimported or changed:
+        relation = "stale"
+    elif later:
+        relation = "superseded"
+    else:
+        relation = "current"
+
+    return CheckBase(
+        relation=relation,
+        snapshot=snapshot,
+        latest=latest,
+        later=later,
+        selected_batches=ticked,
+        changed_batches=tuple(changed),
+        reimported_ids=tuple(reimported),
+    )
+
+
+def load_check_base(
+    conn: sqlite3.Connection,
+    *,
+    recorded_id: int,
+    selected_codes: Iterable[str],
+) -> CheckBase:
+    """Load the ticked snapshot and classify it against newer submissions.
+
+    All reads share one transaction, so the ticked snapshot, the chain of
+    later submissions and the newest id are mutually consistent.
+    """
+    with read_tx(conn):
+        return _check_base_in_tx(
+            conn, recorded_id=recorded_id, selected_codes=selected_codes
+        )
+
+
+def verify_check_base(
+    conn: sqlite3.Connection, base: CheckBase
+) -> CheckBase:
+    """Re-check the ticked base after reconciliation has finished.
+
+    Commits may land while the cover search runs. If one of them makes the
+    ticked selection stale, no conclusion may be shown. Harmless later
+    revision updates (unselected batches) leave the recorded snapshot valid;
+    the returned base carries the newest ids for display.
+    """
+    with read_tx(conn):
+        latest = latest_submission(conn)
+        if latest is not None and latest.id == base.latest.id:
+            return base
+        fresh = _check_base_in_tx(
+            conn,
+            recorded_id=base.snapshot.submission.id,
+            selected_codes=(batch.code for batch in base.selected_batches),
+        )
+    if fresh.is_stale:
+        raise RevisionError(
+            "核对期间已有新的提交生效并使本次勾选过期，本次不给出结论；"
+            "请刷新后重新勾选核对"
+        )
+    return fresh
 
 
 def _now() -> str:
